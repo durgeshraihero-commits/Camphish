@@ -1,5 +1,5 @@
 {
-  "name": "auto-capture-site",
+  "name": "camphish",
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
@@ -7,9 +7,8 @@
   },
   "dependencies": {
     "axios": "^1.6.7",
-    "cors": "^2.8.5",
     "express": "^4.18.2",
     "form-data": "^4.0.0",
-    "multer": "^1.4.5"
+    "multer": "1.4.5-lts.1"
   }
 }
